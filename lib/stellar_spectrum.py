@@ -97,6 +97,68 @@ def get_spectrum(T,logg,Z,a):
                 shutil.copyfileobj(r, f)
     return(wavename,specname)
 
+def get_spectrum_pysme(wave_start, wave_end, T, logg, Z, mus=[], abund = {}):
+    """Constructing a spectrum from pySME. pySME uses the MARCS 2014 grid by
+    default. It is also possible to use custom grids or fixed atmospheres.
+    Individual elemental abundances can also be specified and updated.
+
+        Parameters
+        ----------
+        wave_start : float
+            Start of modelled wavelength range in nm in vacuum
+        wave_end :  float
+            Ending wavelength range in nm in vacuum
+        T : int, float
+            The model effective temperature of the star in Kelvin. Acceptable
+            values are 2500 - 8000 K.
+        logg : int, float
+            The model log(g) value. The surface gravity of the star in log(cgs).
+            Acceptable values are: -0.5 - 5.5
+        Z : int, float
+            The model metallicity of the star in log_10 relative to the indiviual
+            abundances. Acceptable values are: -5 - 1
+
+        Returns
+        -------
+        wl,f : np.array(),np.array()
+            The wavelength (nm) and flux (erg/s/cm^2/cm) axes of the requested
+            spectrum.
+        """
+    from pysme.sme import SME_Structure as SME_Struct
+    from pysme.abund import Abund
+    from pysme.synthesize import synthesize_spectrum
+    from pysme.solve import solve
+    from pysme.linelist.vald import ValdFile
+    import numpy as np
+
+    sme = SME_Struct()
+    sme.teff, sme.logg, sme.monh = T, logg, Z
+
+    # Convert from nm to Angstrom
+    wave_start *= 10
+    wave_end *= 10
+
+    # Account for velocity shift in wavelengths for StarRotator
+    wave_start -= 5
+    wave_end += 5
+    
+    sme.abund = Abund.solar()
+    # update = {"He": 11.93}
+    # sme.abund.update_pattern(updates=update)  # input file/dict
+    # print(sme.abund.get_pattern())
+    if not abund:
+        sme.abund.update_pattern(updates=abund)
+    
+    sme.wran = [[wave_start, wave_end]]
+    vald = ValdFile("VALD_20220201.dat")  # github or link to file
+    sme.linelist = vald
+    
+    if len(mus) > 1:
+        sme.mu = mus
+    sme = synthesize_spectrum(sme)
+
+    return *sme.wave/10, *sme.synth
+
 def read_spectrum(T,logg,metallicity=0.0,alpha=0.0):
     """Wrapper for the function get_spectrum() above, that checks that the input
         T, log(g), metallicity and alpha are in accordance with what is provided by

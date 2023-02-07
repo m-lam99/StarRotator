@@ -162,7 +162,7 @@ class StarRotator(object):
         self.logg = float(starparams[5].split()[0])
         self.u1 = float(starparams[6].split()[0])
         self.u2 = float(starparams[7].split()[0])
-        self.mus = float(starparams[8].split()[0])
+        self.mus = int(starparams[8].split()[0])
         self.R = float(starparams[9].split()[0])
         self.sma_Rs = float(planetparams[0].split()[0])
         self.ecc = float(planetparams[1].split()[0])
@@ -193,7 +193,7 @@ class StarRotator(object):
         except ValueError as err:
             print("Parser: ",err.args)
 
-        if self.mus != 0:
+        if self.mus > 1:
             self.mus = np.linspace(0.0,1.0,self.mus)#Uncomment this to run in CLV mode with SPECTRUM.
 
 
@@ -215,9 +215,11 @@ class StarRotator(object):
         self.flux_grid = vgrid.calc_flux_stellar(self.x,self.y,self.u1,self.u2)
 
         if isinstance(self.mus,np.ndarray) != True:#SWITCH BETWEEN PHOENIX (mus=0) AND SPECTRUM
-            print('--- Reading spectrum from PHOENIX')
+            # print('--- Reading spectrum from PHOENIX')
+            print('--- Creating spectrum from pySME')
             print('-----T=%sK, log(g)=%s, Z=%s.' % (self.T,self.logg,self.Z))
-            wl,fx = spectrum.read_spectrum(self.T,self.logg,metallicity=self.Z)
+            # wl,fx = spectrum.read_spectrum(self.T,self.logg,metallicity=self.Z)
+            wl, fx = spectrum.get_spectrum_pysme(self.wave_start, self.wave_end, self.T, self.logg, self.Z)
             print('--- Integrating disk')
             if  self.drr == 0:
                 print('------ Fast integration')
@@ -226,19 +228,22 @@ class StarRotator(object):
                 print('------ Slow integration')
                 wlF,F = integrate.build_spectrum_slow(wl,fx,self.wave_start,self.wave_end,self.x,self.y,self.vel_grid,self.flux_grid)
         else:#Meaning, if we have no mu's do:
-            test.test_KURUCZ()
-            print('--- Computing limb-resolved spectra with SPECTRUM')
+            # test.test_KURUCZ()
+            # print('--- Computing limb-resolved spectra with SPECTRUM')
+            print('--- Computing limb-resolved spectra with pySME')
             print('-----T=%sK, log(g)=%s, Z=%s.'% (self.T,self.logg,self.Z))
 
             # print(self.wave_start,math.floor(ops.vactoair(self.wave_start)*10.0)/10.0)
             # print(self.wave_end,math.ceil(ops.vactoair(self.wave_end)*10.0)/10.0)
             # sys.exit()
             maxvel = math.ceil(np.nanmax(np.abs(self.vel_grid)))
-            wl,fx_list = spectrum.compute_spectrum(self.T,self.logg,self.Z,self.mus,math.floor(ops.vactoair(self.wave_start*ops.doppler((-1.0)*maxvel))*10.0)/10.0,math.ceil(ops.vactoair(self.wave_end*ops.doppler(maxvel))*10.0)/10.0,mode='anM')
+            # wl,fx_list = spectrum.compute_spectrum(self.T,self.logg,self.Z,self.mus,math.floor(ops.vactoair(self.wave_start*ops.doppler((-1.0)*maxvel))*10.0)/10.0,math.ceil(ops.vactoair(self.wave_end*ops.doppler(maxvel))*10.0)/10.0,mode='anM')
+            wl, fx = spectrum.get_spectrum_pysme(self.wave_start, self.wave_end, self.T, self.logg, self.Z, self.mus)
             print('--- Integrating limb-resolved disk')
             # print(wl,self.wave_start)
             # sys.exit()
-            wlF,F = integrate.build_spectrum_limb_resolved(wl,fx_list,self.mus, self.wave_start,self.wave_end,self.x,self.y,self.vel_grid)
+            # wlF,F = integrate.build_spectrum_limb_resolved(wl,fx,self.mus, self.wave_start,self.wave_end,self.x,self.y,self.vel_grid)
+            wlF,F = integrate.build_spectrum_fast(wl,fx,self.wave_start,self.wave_end,self.x,self.y,self.vel_grid,self.flux_grid)
 
 
 
@@ -253,7 +258,9 @@ class StarRotator(object):
         mask_out = []
         for i in range(self.Nexp):
             if isinstance(self.mus,np.ndarray) == True:
-                wlp,Fp,flux,mask = integrate.build_local_spectrum_limb_resolved(self.xp[i],self.yp[i],self.zp[i],self.Rp_Rs,wl,fx_list,self.mus,self.wave_start,self.wave_end,self.x,self.y,self.vel_grid)
+                # wlp,Fp,flux,mask = integrate.build_local_spectrum_limb_resolved(self.xp[i],self.yp[i],self.zp[i],self.Rp_Rs,wl,fx_list,self.mus,self.wave_start,self.wave_end,self.x,self.y,self.vel_grid)
+                wlp,Fp,flux,mask = integrate.build_local_spectrum_fast(self.xp[i],self.yp[i],self.zp[i],self.Rp_Rs,wl,fx,self.wave_start,self.wave_end,self.x,self.y,self.vel_grid,self.flux_grid)
+
             else:
                 wlp,Fp,flux,mask = integrate.build_local_spectrum_fast(self.xp[i],self.yp[i],self.zp[i],self.Rp_Rs,wl,fx,self.wave_start,self.wave_end,self.x,self.y,self.vel_grid,self.flux_grid)
             integrate.statusbar(i,self.Nexp)
