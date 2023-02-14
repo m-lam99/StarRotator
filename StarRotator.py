@@ -22,6 +22,7 @@ import math
 from matplotlib.patches import Circle
 import lib.planet_pos as ppos
 import copy
+import ast
 #main body of code
 
 
@@ -164,6 +165,7 @@ class StarRotator(object):
         self.u2 = float(starparams[7].split()[0])
         self.mus = int(starparams[8].split()[0])
         self.R = float(starparams[9].split()[0])
+        self.abund =starparams[10:]
         self.sma_Rs = float(planetparams[0].split()[0])
         self.ecc = float(planetparams[1].split()[0])
         self.omega = float(planetparams[2].split()[0])
@@ -193,8 +195,8 @@ class StarRotator(object):
         except ValueError as err:
             print("Parser: ",err.args)
 
-        if self.mus > 1:
-            self.mus = np.linspace(0.0,1.0,self.mus)#Uncomment this to run in CLV mode with SPECTRUM.
+        if self.mus != 0:
+            self.mus = np.linspace(0.1,1.0,self.mus)#Uncomment this to run in CLV mode with SPECTRUM.
 
 
     def compute_spectrum(self):
@@ -238,12 +240,12 @@ class StarRotator(object):
             # sys.exit()
             maxvel = math.ceil(np.nanmax(np.abs(self.vel_grid)))
             # wl,fx_list = spectrum.compute_spectrum(self.T,self.logg,self.Z,self.mus,math.floor(ops.vactoair(self.wave_start*ops.doppler((-1.0)*maxvel))*10.0)/10.0,math.ceil(ops.vactoair(self.wave_end*ops.doppler(maxvel))*10.0)/10.0,mode='anM')
-            wl, fx = spectrum.get_spectrum_pysme(self.wave_start, self.wave_end, self.T, self.logg, self.Z, self.mus)
+            wl, fx_list = spectrum.get_spectrum_pysme(self.wave_start, self.wave_end, self.T, self.logg, self.Z, self.mus, self.abund)
             print('--- Integrating limb-resolved disk')
             # print(wl,self.wave_start)
             # sys.exit()
-            # wlF,F = integrate.build_spectrum_limb_resolved(wl,fx,self.mus, self.wave_start,self.wave_end,self.x,self.y,self.vel_grid)
-            wlF,F = integrate.build_spectrum_fast(wl,fx,self.wave_start,self.wave_end,self.x,self.y,self.vel_grid,self.flux_grid)
+            wlF,F = integrate.build_spectrum_limb_resolved(wl,fx_list,self.mus, self.wave_start,self.wave_end,self.x,self.y,self.vel_grid, self.flux_grid)
+            # wlF,F = integrate.build_spectrum_fast(wl,fx,self.wave_start,self.wave_end,self.x,self.y,self.vel_grid,self.flux_grid)
 
 
 
@@ -258,8 +260,7 @@ class StarRotator(object):
         mask_out = []
         for i in range(self.Nexp):
             if isinstance(self.mus,np.ndarray) == True:
-                # wlp,Fp,flux,mask = integrate.build_local_spectrum_limb_resolved(self.xp[i],self.yp[i],self.zp[i],self.Rp_Rs,wl,fx_list,self.mus,self.wave_start,self.wave_end,self.x,self.y,self.vel_grid)
-                wlp,Fp,flux,mask = integrate.build_local_spectrum_fast(self.xp[i],self.yp[i],self.zp[i],self.Rp_Rs,wl,fx,self.wave_start,self.wave_end,self.x,self.y,self.vel_grid,self.flux_grid)
+                wlp,Fp,flux,mask = integrate.build_local_spectrum_limb_resolved(self.xp[i],self.yp[i],self.zp[i],self.Rp_Rs,wl,fx_list,self.mus,self.wave_start,self.wave_end,self.x,self.y,self.vel_grid)
 
             else:
                 wlp,Fp,flux,mask = integrate.build_local_spectrum_fast(self.xp[i],self.yp[i],self.zp[i],self.Rp_Rs,wl,fx,self.wave_start,self.wave_end,self.x,self.y,self.vel_grid,self.flux_grid)

@@ -447,7 +447,8 @@ def compute_spectrum(T,logg,Z,mu,wlmin,wlmax,macroturbulence=0.0,mode='an',loud=
 def get_spectrum_pysme(wave_start, wave_end, T, logg, Z, mu=[], abund = {}):
     """Constructing a spectrum from pySME. pySME uses the MARCS 2014 grid by
     default. It is also possible to use custom grids or fixed atmospheres.
-    Individual elemental abundances can also be specified and updated.
+    Individual elemental abundances can also be specified and updated. If an
+    array of mu angles is specified, the spectrum for each mu angle is calculated.
 
         Parameters
         ----------
@@ -464,6 +465,9 @@ def get_spectrum_pysme(wave_start, wave_end, T, logg, Z, mu=[], abund = {}):
         Z : int, float
             The model metallicity of the star in log_10 relative to the indiviual
             abundances. Acceptable values are: -5 - 1
+        mu : np.array()
+            Array of mu angles to calculate the spectrum over. If an array is
+            specified, a list of fluxes for each mu angle is returned.
 
         Returns
         -------
@@ -477,6 +481,7 @@ def get_spectrum_pysme(wave_start, wave_end, T, logg, Z, mu=[], abund = {}):
     from pysme.solve import solve
     from pysme.linelist.vald import ValdFile
     import numpy as np
+    import ast
 
     sme = SME_Struct()
     sme.teff, sme.logg, sme.monh = T, logg, Z
@@ -490,11 +495,10 @@ def get_spectrum_pysme(wave_start, wave_end, T, logg, Z, mu=[], abund = {}):
     wave_end += 5
     
     sme.abund = Abund.solar()
-    # update = {"He": 11.93}
-    # sme.abund.update_pattern(updates=update)  # input file/dict
-    # print(sme.abund.get_pattern())
-    # if not abund:
-    #     sme.abund.update_pattern(updates=abund)
+
+    if abund:
+        for i in range(len(abund)):
+            sme.abund.update_pattern(updates=ast.literal_eval(abund[i]))
     
     sme.wran = [[wave_start, wave_end]]
     vald = ValdFile("VALD_20220201.dat")  # github or link to file
