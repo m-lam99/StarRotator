@@ -508,11 +508,11 @@ def get_spectrum_pysme(wave_start, wave_end, T, logg, Z, mu=[], abund = {}):
         # mu = [mu]
         fx = []
         for m in mu:#Loop over all mu angles
-            sme.mu = m
+            sme.mu = m # check this value
             sme = synthesize_spectrum(sme)
             w, f = *sme.wave/10, *sme.synth
             wl = w
-            fx.append(f)
+            fx.append(f.copy())
         return wl, fx
         
     else:
