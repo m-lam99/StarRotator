@@ -22,7 +22,6 @@ import math
 from matplotlib.patches import Circle
 import lib.planet_pos as ppos
 import copy
-import ast
 #main body of code
 
 
@@ -241,6 +240,8 @@ class StarRotator(object):
             maxvel = math.ceil(np.nanmax(np.abs(self.vel_grid)))
             # wl,fx_list = spectrum.compute_spectrum(self.T,self.logg,self.Z,self.mus,math.floor(ops.vactoair(self.wave_start*ops.doppler((-1.0)*maxvel))*10.0)/10.0,math.ceil(ops.vactoair(self.wave_end*ops.doppler(maxvel))*10.0)/10.0,mode='anM')
             wl, fx_list = spectrum.get_spectrum_pysme(self.wave_start, self.wave_end, self.T, self.logg, self.Z, self.mus, self.abund)
+            self.fx_sme = copy.deepcopy(fx_list)
+            self.wl_sme = copy.deepcopy(wl)
             print('--- Integrating limb-resolved disk')
             # print(wl,self.wave_start)
             # sys.exit()
@@ -252,6 +253,7 @@ class StarRotator(object):
         self.xp,self.yp,self.zp = ppos.calc_planet_pos(self.sma_Rs, self.ecc, self.omega, self.orbinc, self.pob, self.Rp_Rs, self.orb_p, self.transitC, self.mode, self.times, self.exptimes)
 
 
+
         # for i in range(len(self.xp)):
         #     print(self.xp[i],self.yp[i],self.zp[i])
         # pdb.set_trace()
@@ -260,7 +262,7 @@ class StarRotator(object):
         mask_out = []
         for i in range(self.Nexp):
             if isinstance(self.mus,np.ndarray) == True:
-                wlp,Fp,flux,mask = integrate.build_local_spectrum_limb_resolved(self.xp[i],self.yp[i],self.zp[i],self.Rp_Rs,wl,fx_list,self.mus,self.wave_start,self.wave_end,self.x,self.y,self.vel_grid)
+                wlp,Fp,flux,mask = integrate.build_local_spectrum_limb_resolved(self.xp[i],self.yp[i],self.zp[i],self.Rp_Rs,wl,fx_list,self.mus,self.wave_start,self.wave_end,self.x,self.y,self.vel_grid, self.flux_grid)
 
             else:
                 wlp,Fp,flux,mask = integrate.build_local_spectrum_fast(self.xp[i],self.yp[i],self.zp[i],self.Rp_Rs,wl,fx,self.wave_start,self.wave_end,self.x,self.y,self.vel_grid,self.flux_grid)
@@ -394,6 +396,7 @@ class StarRotator(object):
             ax[0][1].plot(self.times[0:i],self.lightcurve[0:i],'.',color='black')
             ax[0][1].set_xlim((min(self.times),max(self.times)))
             ax[0][1].set_ylim((minflux-0.1*self.Rp_Rs**2.0),1.0+0.1*self.Rp_Rs**2)
+            # ax[0][1].set_ylim((min(self.lightcurve)-100,max(self.lightcurve)+100))
             ax[1][1].plot(self.wl,F/np.nanmax(F),color='black',alpha = 0.5)
             ymin = np.nanmin(F/np.nanmax(F))
             ymax = np.nanmax(F/np.nanmax(F))
