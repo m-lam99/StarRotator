@@ -393,10 +393,11 @@ class StarRotator(object):
                 planet2 = Circle((self.xp[i],self.yp[i]),self.Rp_Rs, facecolor='black', edgecolor='black', lw=1)
                 ax[0][0].add_patch(planet1)
                 ax[1][0].add_patch(planet2)
+            ax[0][0].set_ylim((min(self.y),max(self.y)))
+            ax[1][0].set_ylim((min(self.y),max(self.y)))
             ax[0][1].plot(self.times[0:i],self.lightcurve[0:i],'.',color='black')
             ax[0][1].set_xlim((min(self.times),max(self.times)))
             ax[0][1].set_ylim((minflux-0.1*self.Rp_Rs**2.0),1.0+0.1*self.Rp_Rs**2)
-            # ax[0][1].set_ylim((min(self.lightcurve)-100,max(self.lightcurve)+100))
             ax[1][1].plot(self.wl,F/np.nanmax(F),color='black',alpha = 0.5)
             ymin = np.nanmin(F/np.nanmax(F))
             ymax = np.nanmax(F/np.nanmax(F))
@@ -476,7 +477,74 @@ class StarRotator(object):
         # plt.show()
 
 
+    def animate_spectrum(self):
+        """Plots an animation of the transit event, the stellar flux and velocity
+        fields, and the resulting transit and line-shape variations. The animation
+        is located in the subfolder `anim`. Anything located in this folder prior
+        to running this function will be removed.
 
+        Parameters
+        ----------
+            None
+        Returns
+        -------
+            None
+        """
+        import matplotlib.pyplot as plt
+        import lib.integrate as integrate
+        import numpy as np
+        from matplotlib.patches import Circle
+        import shutil
+        import os
+        import os.path
+        if os.path.isdir('anim/') == True:
+            shutil.rmtree('anim/')#First delete the contents of the anim folder.
+        os.mkdir('anim/')
+        minflux = min(self.lightcurve)
+        F=self.stellar_spectrum
+        for i in range(self.Nexp):
+            mask = self.masks[i]
+            fig, ax = plt.subplots(figsize=(12,5))
+            ax.plot(self.wl,F/np.nanmax(F),color='black',alpha = 0.5, lw=0.5)
+            ymin = np.nanmin(F/np.nanmax(F))
+            ymax = np.nanmax(F/np.nanmax(F))
+            linedepth = ymax - ymin
+            ax.plot(self.wl,self.spectra[i]/np.nanmax(self.spectra[i]),color='black', lw=0.5)
+            yl = (ymin-0.1*linedepth,ymax+0.3*linedepth)
+            ax.set_ylim(yl)
+            ax2 = plt.twinx()
+            ax2.plot(self.wl,(self.spectra[i])*np.nanmax(F)/F/np.nanmax(self.spectra[i]),color='skyblue')
+            sf = 30.0
+            ax2.set_ylim((1.0-(1-yl[0])/sf,1.0+(yl[1]-1)/sf))
+            ax2.set_ylabel('Ratio in transit / out of transit',fontsize = 7)
+            ax2.tick_params(axis='both', which='major', labelsize=6)
+            ax2.tick_params(axis='both', which='minor', labelsize=5)
+            ax.set_ylabel('Normalised flux',fontsize=7)
+            ax.set_xlabel('Wavelength (nm)',fontsize=7)
+            ax.tick_params(axis='both', which='major', labelsize=6)
+            ax.tick_params(axis='both', which='minor', labelsize=5)
+            if len(str(i)) == 1:
+                out = '000'+str(i)
+            if len(str(i)) == 2:
+                out = '00'+str(i)
+            if len(str(i)) == 3:
+                out = '0'+str(i)
+            if len(str(i)) == 4:
+                out = str(i)
+            fig.savefig('anim/'+out+'.png', dpi=fig.dpi)
+            integrate.statusbar(i,self.Nexp)
+            plt.close()
+        print('',end="\r")
+        print('--- Saving to animation_spectra.gif')
+
+        status = os.system('convert -delay 8 anim/*.png animation_spectra.gif')
+        if status != 0:
+            print('The conversion of the animation frames into a gif has')
+            print('failed; probably because the Imagemagick convert command')
+            print('was not found. The animation frames have been created in')
+            print('the anim/ folder. If you want to convert these into a .gif,')
+            print('please do it manually, or install Imagemagick, see')
+            print('https://imagemagick.org')
 
     # void1,void2,minflux,void3 = integrate.build_local_spectrum_fast(0,0,RpRs,wl,fx, wave_start, wave_end,x,y,vel_grid,flux_grid)
 

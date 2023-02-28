@@ -505,7 +505,6 @@ def get_spectrum_pysme(wave_start, wave_end, T, logg, Z, mu=[], abund = {}):
     sme.linelist = vald
     
     if len(mu) > 0:
-        # mu = [mu]
         fx = []
         for m in mu:#Loop over all mu angles
             sme.mu = m # check this value
