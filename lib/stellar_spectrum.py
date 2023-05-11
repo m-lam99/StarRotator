@@ -485,6 +485,8 @@ def get_spectrum_pysme(wave_start, wave_end, T, logg, Z, mu=[], abund = {}):
 
     sme = SME_Struct()
     sme.teff, sme.logg, sme.monh = T, logg, Z
+    sme.atmo.method = 'grid'
+    sme.atmo.source= 'atlas12.sav'
 
     # Convert from nm to Angstrom
     wave_start *= 10
@@ -507,8 +509,9 @@ def get_spectrum_pysme(wave_start, wave_end, T, logg, Z, mu=[], abund = {}):
     if len(mu) > 0:
         fx = []
         for m in mu:#Loop over all mu angles
-            sme.mu = m # check this value
+            sme.mu = m
             sme = synthesize_spectrum(sme)
+            
             w, f = *sme.wave/10, *sme.synth
             wl = w
             fx.append(f.copy())
