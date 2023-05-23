@@ -5,6 +5,7 @@ data/
 .DS_Store
 anim/
 animation.gif
+*.gif
 *.png
 *.fits
 M2_obs.txt
@@ -14,3 +15,9 @@ __pycache__/
 lib/SPECTRUM/*.o
 lib/SPECTRUM/*.dat
 temp
+.vscode
+.ipynb_checkpoints
+lib/.ipynb_checkpoints
+lib/SPECTRUM/.ipynb_checkpoints
+*.npy
+syntherr.log
