@@ -15,6 +15,7 @@ import lib.plotting as pl
 import lib.operations as ops
 import lib.stellar_spectrum as spectrum
 import lib.integrate as integrate
+import lib.solve as solve
 import pdb
 import time
 import matplotlib.pyplot as plt
@@ -220,7 +221,7 @@ class StarRotator(object):
             print('--- Creating spectrum from pySME')
             print('-----T=%sK, log(g)=%s, Z=%s.' % (self.T,self.logg,self.Z))
             # wl,fx = spectrum.read_spectrum(self.T,self.logg,metallicity=self.Z)
-            wl, fx = spectrum.get_spectrum_pysme(self.wave_start, self.wave_end, self.T, self.logg, self.Z)
+            wl, fx= spectrum.get_spectrum_pysme(self.wave_start, self.wave_end, self.T, self.logg, self.Z)
             print('--- Integrating disk')
             if  self.drr == 0:
                 print('------ Fast integration')
@@ -258,6 +259,7 @@ class StarRotator(object):
         #     print(self.xp[i],self.yp[i],self.zp[i])
         # pdb.set_trace()
         F_out = np.zeros((self.Nexp,len(F)))
+        F_planet = np.zeros((self.Nexp,len(F)))
         flux_out = []
         mask_out = []
         for i in range(self.Nexp):
@@ -269,11 +271,13 @@ class StarRotator(object):
             integrate.statusbar(i,self.Nexp)
 
             F_out[i,:]=F-Fp
+            F_planet[i,:] = Fp
             flux_out.append(flux)
             mask_out.append(mask)
         #This defines the output.
         self.wl = wlF
         self.stellar_spectrum = F
+        self.Fp = copy.deepcopy(F_planet)
         self.spectra = copy.deepcopy(F_out)
         self.lightcurve = flux_out
         self.masks = mask_out
@@ -319,6 +323,7 @@ class StarRotator(object):
         plt.pcolormesh(self.wl,self.times,self.residual)
         plt.xlabel('Wavelength (nm)')
         plt.ylabel('Phase')
+        plt.colorbar()
         plt.show()
 
 
@@ -513,7 +518,13 @@ class StarRotator(object):
             yl = (ymin-0.1*linedepth,ymax+0.3*linedepth)
             ax.set_ylim(yl)
             ax2 = plt.twinx()
+            
+            r = np.sqrt(self.xp**2 + self.yp**2)
+            mu = np.sqrt(1-r**2)
+            flux = self.Rp_Rs ** 2 * ((1-self.u1*(1-mu)-self.u2*(1-mu)**2)/(1-self.u1/3-self.u2/6))
+            F_B = 1 - flux[:,np.newaxis] / F
             ax2.plot(self.wl,(self.spectra[i])*np.nanmax(F)/F/np.nanmax(self.spectra[i]),color='skyblue')
+            ax2.plot(self.wl,F_B[i] * np.nanmax(F)/np.nanmax(self.spectra[i]),color='firebrick')
             sf = 30.0
             ax2.set_ylim((1.0-(1-yl[0])/sf,1.0+(yl[1]-1)/sf))
             ax2.set_ylabel('Ratio in transit / out of transit',fontsize = 7)
@@ -546,14 +557,125 @@ class StarRotator(object):
             print('please do it manually, or install Imagemagick, see')
             print('https://imagemagick.org')
 
-    # void1,void2,minflux,void3 = integrate.build_local_spectrum_fast(0,0,RpRs,wl,fx, wave_start, wave_end,x,y,vel_grid,flux_grid)
+    def animate_spectrum_planet(self):
+        """Plots an animation of the transit event, the stellar flux and velocity
+        fields, and the resulting transit and line-shape variations. The animation
+        is located in the subfolder `anim`. Anything located in this folder prior
+        to running this function will be removed.
 
-    #The following puts a large circular spot with a T 1000K less than the star in the center.
-    # wl2,fx2 = spectrum.read_spectrum(T-1000,logg)
-    # wlp,Fp,flux,mask = integrate.build_local_spectrum_fast(0,0,0.2,wl,fx, wave_start, wave_end,x,y,vel_grid,flux_grid)
-    # wls,Fs,fluxs,masks = integrate.build_local_spectrum_fast(0,0,0.2,wl2,fx2, wave_start, wave_end,x,y,vel_grid,flux_grid)
-    # Ft = F-Fp+Fs
-    # plt.plot(wlF,F)
-    # plt.plot(wlF,Ft)
-    # plt.show()
-    # sys.exit()
+        Parameters
+        ----------
+            None
+        Returns
+        -------
+            None
+        """
+        import matplotlib.pyplot as plt
+        import lib.integrate as integrate
+        import numpy as np
+        from matplotlib.patches import Circle
+        import shutil
+        import os
+        import os.path
+        if os.path.isdir('anim/') == True:
+            shutil.rmtree('anim/')#First delete the contents of the anim folder.
+        os.mkdir('anim/')
+        minflux = min(self.lightcurve)
+        F=self.stellar_spectrum
+        for i in range(self.Nexp):
+            mask = self.masks[i]
+            fig, ax = plt.subplots(figsize=(12,5))
+            ax.plot(self.wl,F/np.nanmax(F),color='black',alpha = 0.5, lw=0.5)
+            ymin = np.nanmin(F/np.nanmax(F))
+            ymax = np.nanmax(F/np.nanmax(F))
+            linedepth = ymax - ymin
+            ax.plot(self.wl,self.spectra[i]/np.nanmax(self.spectra[i]),color='black', lw=0.5)
+            yl = (ymin-0.1*linedepth,ymax+0.3*linedepth)
+            ax.set_ylim(yl)
+            ax2 = plt.twinx()
+            ax2.plot(self.wl,self.Fp[i],color='skyblue')
+            sf = 30.0
+            ax2.set_ylim((np.nanmin(self.Fp)-0.01,np.nanmax(self.Fp)+0.01))
+            
+            r = np.nanmin(np.sqrt(self.xp**2 + self.yp**2))
+            mu_max = np.sqrt(1-r**2)
+            max_flux = self.Rp_Rs ** 2 * ((1-self.u1*(1-mu_max)-self.u2*(1-mu_max)**2)/(1-self.u1/3-self.u2/6))
+            # ax2.axhline(max_flux, label="(Rp/Rs)^2 w/ limb-darkening", color="firebrick")
+            ax2.axhline(max_flux, label="(Rp/Rs)^2 w/ limb-darkening", color="firebrick")
+            ax2.set_ylabel('Flux behind planet',fontsize = 7)
+            ax2.tick_params(axis='both', which='major', labelsize=6)
+            ax2.tick_params(axis='both', which='minor', labelsize=5)
+            ax.set_ylabel('Normalised flux',fontsize=7)
+            ax.set_xlabel('Wavelength (nm)',fontsize=7)
+            ax.tick_params(axis='both', which='major', labelsize=6)
+            ax.tick_params(axis='both', which='minor', labelsize=5)
+            if len(str(i)) == 1:
+                out = '000'+str(i)
+            if len(str(i)) == 2:
+                out = '00'+str(i)
+            if len(str(i)) == 3:
+                out = '0'+str(i)
+            if len(str(i)) == 4:
+                out = str(i)
+            fig.savefig('anim/'+out+'.png', dpi=fig.dpi)
+            integrate.statusbar(i,self.Nexp)
+            plt.close()
+        print('',end="\r")
+        print('--- Saving to animation_planet.gif')
+
+        status = os.system('convert -delay 8 anim/*.png animation_planet.gif')
+        if status != 0:
+            print('The conversion of the animation frames into a gif has')
+            print('failed; probably because the Imagemagick convert command')
+            print('was not found. The animation frames have been created in')
+            print('the anim/ folder. If you want to convert these into a .gif,')
+            print('please do it manually, or install Imagemagick, see')
+            print('https://imagemagick.org')
+
+    def fit_spectrum(self, ll="VALD_20220201.dat"):
+        from lib.solve import solve
+        from pysme.sme import SME_Structure as SME_Struct
+        from pysme.linelist.vald import ValdFile
+        from pysme.abund import Abund
+        import ast
+
+        sme_fit = SME_Struct()
+        sme_fit.wran = [[self.wave_start, self.wave_end]]
+        vald = ValdFile(ll)  # github or link to file
+        sme_fit.linelist = vald
+        sme_fit.abund = Abund.solar()
+        sme_fit.wave = self.wl[::6] * 10 #downsampling - exp
+        sme_fit.spec = self.stellar_spectrum[::6]
+        sme_fit.uncs = (np.ones(sme_fit.spec.size) * 0.01)
+        fitparams = ["teff", "logg", "vsini", "abund na"]
+        
+        # Which parameters should be set and which ones free?
+        sme_fit.teff, sme_fit.logg, sme_fit.monh = self.T, self.logg, self.Z
+        # fitparams = ["vsini"]
+        p0 = np.array([self.T, self.logg, self.velStar/1000, ast.literal_eval(self.abund[0])['Na']])
+        # p0 = np.array([self.velStar/1000])
+        print(f"Initial parameters: {p0}")
+        sme_fit=solve(sme_fit, fitparams, p0)
+        
+        return sme_fit
+    
+    def fit_residuals(self, wl, spec, ll="VALD_20220201.dat"):
+        from lib.solve import solve
+        from pysme.sme import SME_Structure as SME_Struct
+        from pysme.linelist.vald import ValdFile
+        from pysme.abund import Abund
+
+        sme_fit = SME_Struct()
+        sme_fit.wran = [[self.wave_start, self.wave_end]]
+        vald = ValdFile(ll)  # github or link to file
+        sme_fit.linelist = vald
+        sme_fit.abund = Abund.solar()
+        sme_fit.wave = wl * 10
+        sme_fit.spec = spec
+        sme_fit.uncs = (np.ones(sme_fit.spec.size) * 0.01)
+        fitparams = ["teff", "logg", "vsini"]
+        p0 = np.array([self.T, self.logg, self.velStar/1000])
+        print(f"Initial parameters: {p0}")
+        sme_fit=solve(sme_fit, fitparams, p0)
+        
+        return sme_fit
