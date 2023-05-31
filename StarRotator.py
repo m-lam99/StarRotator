@@ -306,6 +306,90 @@ class StarRotator(object):
             self.residual[i,:]=self.spectra[i]/self.stellar_spectrum
         # pdb.set_trace()
         # self.apply_spectral_resolution(self.R)
+        
+    def calculate_transit_times(self):
+        pos = np.sqrt(self.xp**2 + self.yp**2)
+        mu = np.sqrt(1 - pos**2)
+        mu_angles = mu
+        mu_angles[np.isnan(mu_angles)] = 1
+        transit = mu_angles.copy()
+        transit[transit == 1] = 0
+        transit[transit != 0] = 1
+        times = np.argwhere(transit == 1)
+
+        return times
+
+        
+    def compute_unbroadened_spectra(self, t):
+        r = np.sqrt(self.xp**2 + self.yp**2)
+        mu = np.sqrt(1 - r**2)
+
+        res = self.residual[t]
+        RpRs = self.Rp_Rs
+        Fs = self.stellar_spectrum
+        u1 = self.u1
+        u2 = self.u2
+
+        # Add noise
+        R0 = res
+        A = RpRs**2 * ((1 - u1 * (1 - mu[t]) - u2 * (1 - mu[t]) ** 2) / (1 - u1 / 3 - u2 / 6))
+        B = 1 - A / Fs
+        R2 = (1 - R0 / B) / A * (Fs - A) + 1
+        R2 /= np.nanmedian(R2)
+
+        return R2
+    
+    def integrate_obs_spectrum(self):
+        times = self.calculate_transit_times()
+        r = np.sqrt(self.xp**2 + self.yp**2)
+        mu = np.sqrt(1 - r**2)
+        
+        # Calculate total area integrated over
+        xp = self.xp[times]
+        yp = self.yp[times]
+        r = np.sqrt(xp**2 + yp**2)
+        r_max = r + self.Rp_Rs
+        r_max[r_max > 1] = 1
+        r_min = r - self.Rp_Rs
+        A_centre = np.pi * np.nanmin(r_min) ** 2
+        area = np.pi * np.sum(r_max**2 - r_min**2) + A_centre
+
+        I = 1 - self.u1 * (1 - mu) - self.u2 * (1 - mu) ** 2
+        I0 = np.nansum(I)/len(times)
+        # weight
+        w = 1 / area
+        
+        time_r_min = np.nanargmin(r_min)
+        # mu_max = np.sqrt(1 - np.nanmin(r_min) ** 2)
+        R2_centre = self.compute_unbroadened_spectra(time_r_min) * w * I[time_r_min]
+        R2_result = R2_centre
+        
+        wl_grid = self.wl
+
+        for t in times:
+            # Shift wavelength according to Doppler shift
+            xp = (self.xp[t] * 400) + 400
+            yp = (self.yp[t] * 400) + 400
+            vel_star = self.vel_grid[(int)(yp), (int)(xp)]
+            shift = ops.doppler(vel_star)
+            wl = self.wl / shift
+            
+            r = np.sqrt(self.xp[t]**2 + self.yp[t]**2)
+            r_max = r + self.Rp_Rs
+            r_min = r - self.Rp_Rs
+            if r_max > 1:
+                r_max = 1
+            area_t = np.pi * (r_max**2 - r_min**2)
+
+            R2 = self.compute_unbroadened_spectra(t) * area_t * w * I[t]
+            # interpolate star onto same wavelength axis
+            R2_int = np.interp(wl_grid, wl, R2.flatten())
+            R2_result += R2_int
+            
+        R2_result /= I0
+
+        return R2_result
+        
 
 
     def plot_residuals(self):
@@ -582,33 +666,80 @@ class StarRotator(object):
         os.mkdir('anim/')
         minflux = min(self.lightcurve)
         F=self.stellar_spectrum
+        r = np.sqrt(self.xp**2 + self.yp**2)
+        r_max = r + self.Rp_Rs
+        r_min = r - self.Rp_Rs
+        r_max[r_max > 1] = 1
+        r_min[r_min > 1] = 1
         for i in range(self.Nexp):
             mask = self.masks[i]
-            fig, ax = plt.subplots(figsize=(12,5))
-            ax.plot(self.wl,F/np.nanmax(F),color='black',alpha = 0.5, lw=0.5)
-            ymin = np.nanmin(F/np.nanmax(F))
-            ymax = np.nanmax(F/np.nanmax(F))
-            linedepth = ymax - ymin
-            ax.plot(self.wl,self.spectra[i]/np.nanmax(self.spectra[i]),color='black', lw=0.5)
-            yl = (ymin-0.1*linedepth,ymax+0.3*linedepth)
-            ax.set_ylim(yl)
-            ax2 = plt.twinx()
-            ax2.plot(self.wl,self.Fp[i],color='skyblue')
-            sf = 30.0
-            ax2.set_ylim((np.nanmin(self.Fp)-0.01,np.nanmax(self.Fp)+0.01))
+            fig,ax = plt.subplots(nrows=2, ncols=2, figsize=(8, 8), gridspec_kw={'width_ratios': [1, 3]})
+            ax[0][0].pcolormesh(self.x,self.y,self.flux_grid*mask,vmin=0,vmax=1.0*np.nanmax(self.flux_grid),cmap='autumn')
+            ax[1][0].pcolormesh(self.x,self.y,self.vel_grid*mask,cmap='bwr')
+            if self.zp[i] > 0.0:
+                planet1 = Circle((self.xp[i],self.yp[i]),self.Rp_Rs, facecolor='black', edgecolor='black', lw=1)
+                planet2 = Circle((self.xp[i],self.yp[i]),self.Rp_Rs, facecolor='black', edgecolor='black', lw=1)
+                ring1 = Circle((0,0),r_max[i], facecolor='None', edgecolor='black', lw=1)
+                ring2 = Circle((0,0),r_min[i], facecolor='None', edgecolor='black', lw=1)
+                ring3 = Circle((0,0),r_max[i], facecolor='None', edgecolor='black', lw=1)
+                ring4 = Circle((0,0),r_min[i], facecolor='None', edgecolor='black', lw=1)             
+                ax[0][0].add_patch(ring1)
+                ax[0][0].add_patch(ring2)
+                ax[0][0].add_patch(planet1)
+                ax[1][0].add_patch(ring3)
+                ax[1][0].add_patch(ring4)
+                ax[1][0].add_patch(planet2)
+            ax[0][0].axes.set_aspect('equal')
+            ax[1][0].axes.set_aspect('equal')
+            ax[0][1].axes.set_aspect(1)
+            ax[1][1].axes.set_aspect(9)
+            ax[0][0].set_ylim((min(self.y),max(self.y)))
+            ax[1][0].set_ylim((min(self.y),max(self.y)))
+            # ax[0][1].plot(self.times[0:i],self.lightcurve[0:i],'.',color='black')
+            # ax[0][1].set_xlim((min(self.times),max(self.times)))
+            # ax[0][1].set_ylim((minflux-0.1*self.Rp_Rs**2.0),1.0+0.1*self.Rp_Rs**2)
             
-            r = np.nanmin(np.sqrt(self.xp**2 + self.yp**2))
-            mu_max = np.sqrt(1-r**2)
-            max_flux = self.Rp_Rs ** 2 * ((1-self.u1*(1-mu_max)-self.u2*(1-mu_max)**2)/(1-self.u1/3-self.u2/6))
-            # ax2.axhline(max_flux, label="(Rp/Rs)^2 w/ limb-darkening", color="firebrick")
-            ax2.axhline(max_flux, label="(Rp/Rs)^2 w/ limb-darkening", color="firebrick")
-            ax2.set_ylabel('Flux behind planet',fontsize = 7)
-            ax2.tick_params(axis='both', which='major', labelsize=6)
-            ax2.tick_params(axis='both', which='minor', labelsize=5)
-            ax.set_ylabel('Normalised flux',fontsize=7)
-            ax.set_xlabel('Wavelength (nm)',fontsize=7)
-            ax.tick_params(axis='both', which='major', labelsize=6)
-            ax.tick_params(axis='both', which='minor', labelsize=5)
+            ax[0][1].plot(self.wl, self.integrate_obs_spectrum(), color='black')
+            ax[0][1].plot(self.wl, self.compute_unbroadened_spectra(i), color='skyblue')
+            
+            ax[1][1].pcolormesh(self.wl,self.times,self.residual)
+
+            # ax[1][1].colorbar()
+            # ax[1][1].plot(self.wl,F/np.nanmax(F),color='black',alpha = 0.5)
+            # ymin = np.nanmin(self.compute_unbroadened_spectra(i))
+            # ymax = np.nanmax(self.compute_unbroadened_spectra(i))
+            # linedepth = ymax - ymin
+            # ax[1][1].plot(self.wl,self.spectra[i]/np.nanmax(self.spectra[i]),color='black')
+            # ax[1][1].set_xlim((588.5,590.2))
+            yl = (0,1.1)
+            ax[0][1].set_ylim(yl)
+            # ax2 = ax[1][1].twinx()
+            # ax2.plot(self.wl,(self.spectra[i])*np.nanmax(F)/F/np.nanmax(self.spectra[i]),color='skyblue')
+            # sf = 30.0
+            # ax2.set_ylim((1.0-(1-yl[0])/sf,1.0+(yl[1]-1)/sf))
+            # ax2.set_ylabel('Ratio in transit / out of transit',fontsize = 7)
+            # ax2.tick_params(axis='both', which='major', labelsize=6)
+            # ax2.tick_params(axis='both', which='minor', labelsize=5)
+            
+            
+            ax[0][0].set_ylabel('Y (Rs)',fontsize=7)
+            ax[0][0].tick_params(axis='both', which='major', labelsize=6)
+            ax[0][0].tick_params(axis='both', which='minor', labelsize=5)
+            ax[1][0].set_ylabel('Y (Rs)',fontsize=7)
+            ax[1][0].set_xlabel('X (Rs)',fontsize=7)
+            ax[1][0].tick_params(axis='both', which='major', labelsize=6)
+            ax[1][0].tick_params(axis='both', which='minor', labelsize=5)
+            
+            ax[0][1].set_ylabel('Normalised flux',fontsize=7)
+            ax[0][1].set_xlabel('Wavelength (nm)',fontsize=7)
+            ax[0][1].tick_params(axis='both', which='major', labelsize=6)
+            ax[0][1].tick_params(axis='both', which='minor', labelsize=5)
+            ax[1][1].tick_params(axis='both', which='major', labelsize=6)
+            ax[1][1].tick_params(axis='both', which='minor', labelsize=5)
+            ax[1][1].set_ylabel('Phase',fontsize=7)
+            ax[1][1].set_xlabel('Wavelength (nm)',fontsize=7)
+            
+            fig.subplots_adjust(wspace=0.2, hspace=-0.55)
             if len(str(i)) == 1:
                 out = '000'+str(i)
             if len(str(i)) == 2:
@@ -621,9 +752,9 @@ class StarRotator(object):
             integrate.statusbar(i,self.Nexp)
             plt.close()
         print('',end="\r")
-        print('--- Saving to animation_planet.gif')
+        print('--- Saving to animation.gif')
 
-        status = os.system('convert -delay 8 anim/*.png animation_planet.gif')
+        status = os.system('convert -delay 8 anim/*.png animation.gif')
         if status != 0:
             print('The conversion of the animation frames into a gif has')
             print('failed; probably because the Imagemagick convert command')
