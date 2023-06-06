@@ -337,7 +337,7 @@ class StarRotator(object):
         R2 = (1 - R0 / B) / A * (Fs - A) + 1
         R2 /= np.nanmedian(R2)
 
-        return R2
+        return R2.flatten()
     
     def integrate_obs_spectrum(self):
         times = self.calculate_transit_times()
@@ -345,12 +345,12 @@ class StarRotator(object):
         mu = np.sqrt(1 - r**2)
         
         # Calculate total area integrated over
-        xp = self.xp[times]
-        yp = self.yp[times]
-        r = np.sqrt(xp**2 + yp**2)
-        r_max = r + self.Rp_Rs
+        xp_transit = self.xp[times]
+        yp_transit = self.yp[times]
+        r_transit = np.sqrt(xp_transit**2 + yp_transit**2)
+        r_max = r_transit + self.Rp_Rs
         r_max[r_max > 1] = 1
-        r_min = r - self.Rp_Rs
+        r_min = r_transit - self.Rp_Rs
         A_centre = np.pi * np.nanmin(r_min) ** 2
         area = np.pi * np.sum(r_max**2 - r_min**2) + A_centre
 
@@ -359,7 +359,7 @@ class StarRotator(object):
         # weight
         w = 1 / area
         
-        time_r_min = np.nanargmin(r_min)
+        time_r_min = np.nanargmin(r)
         # mu_max = np.sqrt(1 - np.nanmin(r_min) ** 2)
         R2_centre = self.compute_unbroadened_spectra(time_r_min) * w * I[time_r_min]
         R2_result = R2_centre
@@ -368,11 +368,11 @@ class StarRotator(object):
 
         for t in times:
             # Shift wavelength according to Doppler shift
-            xp = (self.xp[t] * 400) + 400
-            yp = (self.yp[t] * 400) + 400
-            vel_star = self.vel_grid[(int)(yp), (int)(xp)]
-            shift = ops.doppler(vel_star)
-            wl = self.wl / shift
+            # xp = (self.xp[t] * 400) + 400
+            # yp = (self.yp[t] * 400) + 400
+            # vel_star = self.vel_grid[(int)(yp), (int)(xp)]
+            # shift = ops.doppler(vel_star)
+            # wl = self.wl / shift
             
             r = np.sqrt(self.xp[t]**2 + self.yp[t]**2)
             r_max = r + self.Rp_Rs
@@ -383,12 +383,12 @@ class StarRotator(object):
 
             R2 = self.compute_unbroadened_spectra(t) * area_t * w * I[t]
             # interpolate star onto same wavelength axis
-            R2_int = np.interp(wl_grid, wl, R2.flatten())
-            R2_result += R2_int
+            # R2_int = np.interp(wl_grid, wl, R2)
+            R2_result += R2
             
         R2_result /= I0
 
-        return R2_result
+        return R2_result/np.nanmedian(R2_result)
         
 
 
@@ -671,6 +671,7 @@ class StarRotator(object):
         r_min = r - self.Rp_Rs
         r_max[r_max > 1] = 1
         r_min[r_min > 1] = 1
+        total_narrow_spectrum = self.integrate_obs_spectrum()
         for i in range(self.Nexp):
             mask = self.masks[i]
             fig,ax = plt.subplots(nrows=2, ncols=2, figsize=(8, 8), gridspec_kw={'width_ratios': [1, 3]})
@@ -692,15 +693,15 @@ class StarRotator(object):
             ax[0][0].axes.set_aspect('equal')
             ax[1][0].axes.set_aspect('equal')
             ax[0][1].axes.set_aspect(1)
-            ax[1][1].axes.set_aspect(9)
+            ax[1][1].axes.set_aspect(5)
             ax[0][0].set_ylim((min(self.y),max(self.y)))
             ax[1][0].set_ylim((min(self.y),max(self.y)))
             # ax[0][1].plot(self.times[0:i],self.lightcurve[0:i],'.',color='black')
             # ax[0][1].set_xlim((min(self.times),max(self.times)))
             # ax[0][1].set_ylim((minflux-0.1*self.Rp_Rs**2.0),1.0+0.1*self.Rp_Rs**2)
             
-            ax[0][1].plot(self.wl, self.integrate_obs_spectrum(), color='black')
-            ax[0][1].plot(self.wl, self.compute_unbroadened_spectra(i), color='skyblue')
+            ax[0][1].plot(self.wl, total_narrow_spectrum, color='skyblue', alpha=0.5)
+            ax[0][1].plot(self.wl, self.compute_unbroadened_spectra(i), color='black')
             
             ax[1][1].pcolormesh(self.wl,self.times,self.residual)
 
