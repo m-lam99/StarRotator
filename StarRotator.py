@@ -308,6 +308,18 @@ class StarRotator(object):
         # self.apply_spectral_resolution(self.R)
         
     def calculate_transit_times(self):
+        """Calculate and return the indices of when the planet is transiting
+        the star.
+        
+        Parameters
+        ----------
+            None
+            
+        Returns
+        -------
+            times : np.array
+                1D array containing indices of in-transit observations.
+        """
         pos = np.sqrt(self.xp**2 + self.yp**2)
         mu = np.sqrt(1 - pos**2)
         mu_angles = mu
@@ -321,6 +333,20 @@ class StarRotator(object):
 
         
     def compute_unbroadened_spectra(self, t):
+        """Calculate and return the local unbroadened stellar spectrum
+        behind the transiting planet at a particular time.
+        
+        Parameters
+        ----------
+            t : int
+                Index of observation
+                
+        Returns
+        -------
+            R2 : np.array
+                1D array containing stellar flux for instantaneous
+                spectrum
+        """
         r = np.sqrt(self.xp**2 + self.yp**2)
         mu = np.sqrt(1 - r**2)
 
@@ -330,7 +356,7 @@ class StarRotator(object):
         u1 = self.u1
         u2 = self.u2
 
-        # Add noise
+        # Calculate narrowband spectrum
         R0 = res
         A = RpRs**2 * ((1 - u1 * (1 - mu[t]) - u2 * (1 - mu[t]) ** 2) / (1 - u1 / 3 - u2 / 6))
         B = 1 - A / Fs
@@ -340,6 +366,19 @@ class StarRotator(object):
         return R2.flatten()
     
     def integrate_obs_spectrum(self):
+        """ Calculate area weighted average spectrum over each in-transit
+        observation. This produces an unbroadened stellar spectra for the
+        area covered by the transiting planet.
+        
+        Parameters
+        ----------
+            None
+            
+        Returns
+        -------
+            R2 : np.array
+            1D array containing stellar flux for instantaneous spectrum
+        """
         times = self.calculate_transit_times()
         r = np.sqrt(self.xp**2 + self.yp**2)
         mu = np.sqrt(1 - r**2)
@@ -360,19 +399,10 @@ class StarRotator(object):
         w = 1 / area
         
         time_r_min = np.nanargmin(r)
-        # mu_max = np.sqrt(1 - np.nanmin(r_min) ** 2)
         R2_centre = self.compute_unbroadened_spectra(time_r_min) * w * I[time_r_min]
         R2_result = R2_centre
-        
-        wl_grid = self.wl
 
         for t in times:
-            # Shift wavelength according to Doppler shift
-            # xp = (self.xp[t] * 400) + 400
-            # yp = (self.yp[t] * 400) + 400
-            # vel_star = self.vel_grid[(int)(yp), (int)(xp)]
-            # shift = ops.doppler(vel_star)
-            # wl = self.wl / shift
             
             r = np.sqrt(self.xp[t]**2 + self.yp[t]**2)
             r_max = r + self.Rp_Rs
@@ -382,8 +412,6 @@ class StarRotator(object):
             area_t = np.pi * (r_max**2 - r_min**2)
 
             R2 = self.compute_unbroadened_spectra(t) * area_t * w * I[t]
-            # interpolate star onto same wavelength axis
-            # R2_int = np.interp(wl_grid, wl, R2)
             R2_result += R2
             
         R2_result /= I0
@@ -655,6 +683,7 @@ class StarRotator(object):
             None
         """
         import matplotlib.pyplot as plt
+        import matplotlib.transforms as mtransforms
         import lib.integrate as integrate
         import numpy as np
         from matplotlib.patches import Circle
@@ -674,7 +703,7 @@ class StarRotator(object):
         total_narrow_spectrum = self.integrate_obs_spectrum()
         for i in range(self.Nexp):
             mask = self.masks[i]
-            fig,ax = plt.subplots(nrows=2, ncols=2, figsize=(8, 8), gridspec_kw={'width_ratios': [1, 3]})
+            fig,ax = plt.subplots(nrows=2, ncols=2, figsize=(10, 10), gridspec_kw={'width_ratios': [1, 3]})
             ax[0][0].pcolormesh(self.x,self.y,self.flux_grid*mask,vmin=0,vmax=1.0*np.nanmax(self.flux_grid),cmap='autumn')
             ax[1][0].pcolormesh(self.x,self.y,self.vel_grid*mask,cmap='bwr')
             if self.zp[i] > 0.0:
@@ -692,35 +721,22 @@ class StarRotator(object):
                 ax[1][0].add_patch(planet2)
             ax[0][0].axes.set_aspect('equal')
             ax[1][0].axes.set_aspect('equal')
-            ax[0][1].axes.set_aspect(1)
-            ax[1][1].axes.set_aspect(5)
+            ax[0][1].axes.set_aspect(0.25)
+            ax[1][1].axes.set_aspect(1.6)
             ax[0][0].set_ylim((min(self.y),max(self.y)))
             ax[1][0].set_ylim((min(self.y),max(self.y)))
-            # ax[0][1].plot(self.times[0:i],self.lightcurve[0:i],'.',color='black')
-            # ax[0][1].set_xlim((min(self.times),max(self.times)))
-            # ax[0][1].set_ylim((minflux-0.1*self.Rp_Rs**2.0),1.0+0.1*self.Rp_Rs**2)
             
-            ax[0][1].plot(self.wl, total_narrow_spectrum, color='skyblue', alpha=0.5)
-            ax[0][1].plot(self.wl, self.compute_unbroadened_spectra(i), color='black')
+            ax[0][1].plot(self.wl, total_narrow_spectrum, color='black', linestyle='dashed', lw=1)
+            ax[0][1].plot(self.wl, self.compute_unbroadened_spectra(i), color='firebrick', lw=1)
             
             ax[1][1].pcolormesh(self.wl,self.times,self.residual)
+            ax[1][1].axhline(y = self.times[i], color = "firebrick")
 
-            # ax[1][1].colorbar()
-            # ax[1][1].plot(self.wl,F/np.nanmax(F),color='black',alpha = 0.5)
-            # ymin = np.nanmin(self.compute_unbroadened_spectra(i))
-            # ymax = np.nanmax(self.compute_unbroadened_spectra(i))
-            # linedepth = ymax - ymin
-            # ax[1][1].plot(self.wl,self.spectra[i]/np.nanmax(self.spectra[i]),color='black')
-            # ax[1][1].set_xlim((588.5,590.2))
-            yl = (0,1.1)
+            yl = (0.3,1.1)
+            xl = (588.9, 589.5)
             ax[0][1].set_ylim(yl)
-            # ax2 = ax[1][1].twinx()
-            # ax2.plot(self.wl,(self.spectra[i])*np.nanmax(F)/F/np.nanmax(self.spectra[i]),color='skyblue')
-            # sf = 30.0
-            # ax2.set_ylim((1.0-(1-yl[0])/sf,1.0+(yl[1]-1)/sf))
-            # ax2.set_ylabel('Ratio in transit / out of transit',fontsize = 7)
-            # ax2.tick_params(axis='both', which='major', labelsize=6)
-            # ax2.tick_params(axis='both', which='minor', labelsize=5)
+            ax[0][1].set_xlim(xl)
+            ax[1][1].set_xlim(xl)
             
             
             ax[0][0].set_ylabel('Y (Rs)',fontsize=7)
@@ -732,7 +748,7 @@ class StarRotator(object):
             ax[1][0].tick_params(axis='both', which='minor', labelsize=5)
             
             ax[0][1].set_ylabel('Normalised flux',fontsize=7)
-            ax[0][1].set_xlabel('Wavelength (nm)',fontsize=7)
+            # ax[0][1].set_xlabel('Wavelength (nm)',fontsize=7)
             ax[0][1].tick_params(axis='both', which='major', labelsize=6)
             ax[0][1].tick_params(axis='both', which='minor', labelsize=5)
             ax[1][1].tick_params(axis='both', which='major', labelsize=6)
@@ -740,7 +756,24 @@ class StarRotator(object):
             ax[1][1].set_ylabel('Phase',fontsize=7)
             ax[1][1].set_xlabel('Wavelength (nm)',fontsize=7)
             
-            fig.subplots_adjust(wspace=0.2, hspace=-0.55)
+            fig.subplots_adjust(wspace=0.25, hspace=-0.6)
+            
+            # label physical distance in and down:
+            trans = mtransforms.ScaledTranslation(5/72, -5/72, fig.dpi_scale_trans)
+            ax[0][0].text(0.0, 1.0, 'a)', transform=ax[0][0].transAxes + trans,
+                    fontsize='medium', verticalalignment='top', fontfamily='serif',
+                    color='red')
+            ax[0][1].text(0.0, 1.0, 'c)', transform=ax[0][1].transAxes + trans,
+                    fontsize='medium', verticalalignment='top', fontfamily='serif',
+                    color='red')
+            ax[1][0].text(0.0, 1.0, 'b)', transform=ax[1][0].transAxes + trans,
+                    fontsize='medium', verticalalignment='top', fontfamily='serif',
+                    color='red')
+            ax[1][1].text(0.0, 1.0, 'd)', transform=ax[1][1].transAxes + trans,
+                    fontsize='medium', verticalalignment='top', fontfamily='serif',
+                    color='red')
+            
+            
             if len(str(i)) == 1:
                 out = '000'+str(i)
             if len(str(i)) == 2:
@@ -755,7 +788,7 @@ class StarRotator(object):
         print('',end="\r")
         print('--- Saving to animation.gif')
 
-        status = os.system('convert -delay 8 anim/*.png animation.gif')
+        status = os.system('convert -delay 15 anim/*.png animation.gif')
         if status != 0:
             print('The conversion of the animation frames into a gif has')
             print('failed; probably because the Imagemagick convert command')
@@ -764,50 +797,30 @@ class StarRotator(object):
             print('please do it manually, or install Imagemagick, see')
             print('https://imagemagick.org')
 
-    def fit_spectrum(self, ll="VALD_20220201.dat"):
-        from lib.solve import solve
-        from pysme.sme import SME_Structure as SME_Struct
-        from pysme.linelist.vald import ValdFile
-        from pysme.abund import Abund
-        import ast
+    # def fit_spectrum(self, ll="VALD_20220201.dat"):
+    #     from lib.solve import solve
+    #     from pysme.sme import SME_Structure as SME_Struct
+    #     from pysme.linelist.vald import ValdFile
+    #     from pysme.abund import Abund
+    #     import ast
 
-        sme_fit = SME_Struct()
-        sme_fit.wran = [[self.wave_start, self.wave_end]]
-        vald = ValdFile(ll)  # github or link to file
-        sme_fit.linelist = vald
-        sme_fit.abund = Abund.solar()
-        sme_fit.wave = self.wl[::6] * 10 #downsampling - exp
-        sme_fit.spec = self.stellar_spectrum[::6]
-        sme_fit.uncs = (np.ones(sme_fit.spec.size) * 0.01)
-        fitparams = ["teff", "logg", "vsini", "abund na"]
+    #     sme_fit = SME_Struct()
+    #     sme_fit.wran = [[self.wave_start, self.wave_end]]
+    #     vald = ValdFile(ll)  # github or link to file
+    #     sme_fit.linelist = vald
+    #     sme_fit.abund = Abund.solar()
+    #     sme_fit.wave = self.wl[::6] * 10 #downsampling - exp
+    #     sme_fit.spec = self.stellar_spectrum[::6]
+    #     sme_fit.uncs = (np.ones(sme_fit.spec.size) * 0.01)
+    #     fitparams = ["teff", "logg", "vsini", "abund na"]
         
-        # Which parameters should be set and which ones free?
-        sme_fit.teff, sme_fit.logg, sme_fit.monh = self.T, self.logg, self.Z
-        # fitparams = ["vsini"]
-        p0 = np.array([self.T, self.logg, self.velStar/1000, ast.literal_eval(self.abund[0])['Na']])
-        # p0 = np.array([self.velStar/1000])
-        print(f"Initial parameters: {p0}")
-        sme_fit=solve(sme_fit, fitparams, p0)
+    #     # Which parameters should be set and which ones free?
+    #     sme_fit.teff, sme_fit.logg, sme_fit.monh = self.T, self.logg, self.Z
+    #     # fitparams = ["vsini"]
+    #     p0 = np.array([self.T, self.logg, self.velStar/1000, ast.literal_eval(self.abund[0])['Na']])
+    #     # p0 = np.array([self.velStar/1000])
+    #     print(f"Initial parameters: {p0}")
+    #     sme_fit=solve(sme_fit, fitparams, p0)
         
-        return sme_fit
+    #     return sme_fit
     
-    def fit_residuals(self, wl, spec, ll="VALD_20220201.dat"):
-        from lib.solve import solve
-        from pysme.sme import SME_Structure as SME_Struct
-        from pysme.linelist.vald import ValdFile
-        from pysme.abund import Abund
-
-        sme_fit = SME_Struct()
-        sme_fit.wran = [[self.wave_start, self.wave_end]]
-        vald = ValdFile(ll)  # github or link to file
-        sme_fit.linelist = vald
-        sme_fit.abund = Abund.solar()
-        sme_fit.wave = wl * 10
-        sme_fit.spec = spec
-        sme_fit.uncs = (np.ones(sme_fit.spec.size) * 0.01)
-        fitparams = ["teff", "logg", "vsini"]
-        p0 = np.array([self.T, self.logg, self.velStar/1000])
-        print(f"Initial parameters: {p0}")
-        sme_fit=solve(sme_fit, fitparams, p0)
-        
-        return sme_fit
