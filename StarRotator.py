@@ -722,7 +722,7 @@ class StarRotator(object):
             ax[0][0].axes.set_aspect('equal')
             ax[1][0].axes.set_aspect('equal')
             ax[0][1].axes.set_aspect(0.25)
-            ax[1][1].axes.set_aspect(1.6)
+            ax[1][1].axes.set_aspect(2)
             ax[0][0].set_ylim((min(self.y),max(self.y)))
             ax[1][0].set_ylim((min(self.y),max(self.y)))
             
