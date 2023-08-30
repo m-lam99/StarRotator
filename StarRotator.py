@@ -669,11 +669,12 @@ class StarRotator(object):
             print('please do it manually, or install Imagemagick, see')
             print('https://imagemagick.org')
 
-    def animate_spectrum_planet(self):
-        """Plots an animation of the transit event, the stellar flux and velocity
-        fields, and the resulting transit and line-shape variations. The animation
-        is located in the subfolder `anim`. Anything located in this folder prior
-        to running this function will be removed.
+    def animate_complete(self):
+        """Plots an animation of the transit event across limb-darkened grid and the
+        velocity fields, and the resulting transit and line-shape variations. Also 
+        includes the corresponding residual plot. The figures are specifically designed
+        for a single Na line in the spectrum. The animation is located in the subfolder 
+        `anim`. Anything located in this folder prior to running this function will be removed.
 
         Parameters
         ----------
@@ -782,7 +783,7 @@ class StarRotator(object):
                 out = '0'+str(i)
             if len(str(i)) == 4:
                 out = str(i)
-            fig.savefig('anim/'+out+'.png', dpi=fig.dpi)
+            fig.savefig('anim/'+out+'.png', dpi=300)
             integrate.statusbar(i,self.Nexp)
             plt.close()
         print('',end="\r")
