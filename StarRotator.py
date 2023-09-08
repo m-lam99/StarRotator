@@ -364,7 +364,7 @@ class StarRotator(object):
         R2 /= np.nanmedian(R2)
 
         return R2.flatten()
-    
+
     def integrate_obs_spectrum(self):
         """ Calculate area weighted average spectrum over each in-transit
         observation. This produces an unbroadened stellar spectra for the
@@ -432,7 +432,7 @@ class StarRotator(object):
         """
         import matplotlib.pyplot as plt
         # res = self.residuals()
-        plt.pcolormesh(self.wl,self.times,self.residual)
+        plt.pcolormesh(self.wl,self.times,self.residual, cmap="afmhot")
         plt.xlabel('Wavelength (nm)')
         plt.ylabel('Phase')
         plt.colorbar()
@@ -723,15 +723,15 @@ class StarRotator(object):
             ax[0][0].axes.set_aspect('equal')
             ax[1][0].axes.set_aspect('equal')
             ax[0][1].axes.set_aspect(0.25)
-            ax[1][1].axes.set_aspect(2)
+            ax[1][1].axes.set_aspect(2.5)
             ax[0][0].set_ylim((min(self.y),max(self.y)))
             ax[1][0].set_ylim((min(self.y),max(self.y)))
             
             ax[0][1].plot(self.wl, total_narrow_spectrum, color='black', linestyle='dashed', lw=1)
-            ax[0][1].plot(self.wl, self.compute_unbroadened_spectra(i), color='firebrick', lw=1)
+            ax[0][1].plot(self.wl, self.compute_unbroadened_spectra(i), color='rebeccapurple', lw=1)
             
-            ax[1][1].pcolormesh(self.wl,self.times,self.residual)
-            ax[1][1].axhline(y = self.times[i], color = "firebrick")
+            ax[1][1].pcolormesh(self.wl,self.times,self.residual, cmap="afmhot")
+            ax[1][1].axhline(y = self.times[i], color = "rebeccapurple")
 
             yl = (0.3,1.1)
             xl = (588.9, 589.5)
