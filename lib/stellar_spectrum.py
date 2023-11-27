@@ -484,9 +484,11 @@ def get_spectrum_pysme(wave_start, wave_end, T, logg, Z, mu=[], abund = {}):
     import ast
 
     sme = SME_Struct()
+    sme.abund = Abund.solar()
     sme.teff, sme.logg, sme.monh = T, logg, Z
+    sme.vsini = 0
     sme.atmo.method = 'grid'
-    sme.atmo.source= 'atlas12.sav'
+    sme.atmo.source= 'atlas12.sav' # set to default
 
     # Convert from nm to Angstrom
     wave_start *= 10
@@ -495,15 +497,13 @@ def get_spectrum_pysme(wave_start, wave_end, T, logg, Z, mu=[], abund = {}):
     # Account for velocity shift in wavelengths for StarRotator
     wave_start -= 5
     wave_end += 5
-    
-    sme.abund = Abund.solar()
 
     if abund:
         for i in range(len(abund)):
             sme.abund.update_pattern(updates=ast.literal_eval(abund[i]))
     
     sme.wran = [[wave_start, wave_end]]
-    vald = ValdFile("VALD_20220201.dat")  # github or link to file
+    vald = ValdFile("/home/madeline/masters-project/linelists/VALD_20220201.dat")  # CHANGE FROM LOCAL PATH
     sme.linelist = vald
     
     if len(mu) > 0:
