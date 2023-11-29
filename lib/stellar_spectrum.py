@@ -444,30 +444,40 @@ def compute_spectrum(T,logg,Z,mu,wlmin,wlmax,macroturbulence=0.0,mode='an',loud=
         sys.exit()
 
 
-def get_spectrum_pysme(wave_start, wave_end, T, logg, Z, mu=[], abund = {}):
+def get_spectrum_pysme(wave_start, wave_end, T, logg, Z, linelist = '', mu=[], abund = {}, grid = ''):
     """Constructing a spectrum from pySME. pySME uses the MARCS 2014 grid by
-    default. It is also possible to use custom grids or fixed atmospheres.
-    Individual elemental abundances can also be specified and updated. If an
-    array of mu angles is specified, the spectrum for each mu angle is calculated.
+    default. It is also possible to use another grid by specifying with the parameter grid.
+    Individual elemental abundances can also be specified and updated. If an array of
+    mu angles is specified, the spectrum for each mu angle is calculated and
+    stored in a list.
 
         Parameters
         ----------
         wave_start : float
-            Start of modelled wavelength range in nm in vacuum
+            Start of modelled wavelength range in nm in air
         wave_end :  float
-            Ending wavelength range in nm in vacuum
+            Ending wavelength range in nm in air
         T : int, float
-            The model effective temperature of the star in Kelvin. Acceptable
-            values are 2500 - 8000 K.
+            The model effective temperature of the star in Kelvin.
         logg : int, float
             The model log(g) value. The surface gravity of the star in log(cgs).
-            Acceptable values are: -0.5 - 5.5
         Z : int, float
             The model metallicity of the star in log_10 relative to the indiviual
-            abundances. Acceptable values are: -5 - 1
+            abundances. 
+        linelist : str
+            Path to VALD linelist used to generate spectrum
         mu : np.array()
             Array of mu angles to calculate the spectrum over. If an array is
             specified, a list of fluxes for each mu angle is returned.
+        abund : str
+            Specific elemental abudances in dict form, eg. '{'X': 6.4}'. Default
+            abundances are solar.
+        grid : str
+            Name of model atmosphere to be used. The default used by pySME is MARCS
+            2014, which spans a temperature range of 2500 - 8000 K, logg between -0.5
+            - 5.5 and metallicity -5 - 1. The other option is the ATLAS12 model, which
+            can be used by specifying "atlas12.sav". This spans a temperature of 
+            3500 - 50 000 K and logg between 0 - 5.
 
         Returns
         -------
@@ -487,8 +497,11 @@ def get_spectrum_pysme(wave_start, wave_end, T, logg, Z, mu=[], abund = {}):
     sme.abund = Abund.solar()
     sme.teff, sme.logg, sme.monh = T, logg, Z
     sme.vsini = 0
-    sme.atmo.method = 'grid'
-    sme.atmo.source= 'atlas12.sav' # set to default
+    
+    # Change from default grid
+    if grid:
+        sme.atmo.method = 'grid'
+        sme.atmo.source = grid
 
     # Convert from nm to Angstrom
     wave_start *= 10
@@ -503,7 +516,7 @@ def get_spectrum_pysme(wave_start, wave_end, T, logg, Z, mu=[], abund = {}):
             sme.abund.update_pattern(updates=ast.literal_eval(abund[i]))
     
     sme.wran = [[wave_start, wave_end]]
-    vald = ValdFile("/home/madeline/masters-project/linelists/VALD_20220201.dat")  # CHANGE FROM LOCAL PATH
+    vald = ValdFile(linelist)
     sme.linelist = vald
     
     if len(mu) > 0:
