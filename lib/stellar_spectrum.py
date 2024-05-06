@@ -176,7 +176,7 @@ def read_spectrum(T,logg,metallicity=0.0,alpha=0.0):
         sys.exit()
 
 
-def get_spectrum_pysme(wave_start, wave_end, T, logg, Z, linelist = '', mu=[], abund = {}, grid = ''):
+def get_spectrum_pysme(wave_start, wave_end, T, logg, Z, linelist = [], mu=[], abund = {}, grid = ''):
     """Constructing a spectrum from pySME. pySME uses the MARCS 2014 grid by
     default. It is also possible to use the ATLAS12 model by setting grid='ATLAS12'.
     Individual elemental abundances can also be specified and updated. If an array of
@@ -224,6 +224,7 @@ def get_spectrum_pysme(wave_start, wave_end, T, logg, Z, linelist = '', mu=[], a
     from pysme.linelist.vald import ValdFile
     import numpy as np
     import ast
+    import linelists
 
     sme = SME_Struct()
     sme.abund = Abund.solar()
@@ -248,8 +249,9 @@ def get_spectrum_pysme(wave_start, wave_end, T, logg, Z, linelist = '', mu=[], a
             sme.abund.update_pattern(updates=ast.literal_eval(abund[i]))
 
     sme.wran = [[wave_start, wave_end]]
-    vald = ValdFile(linelist)
-    sme.linelist = vald
+    # vald = ValdFile(linelist)
+    sme.linelist = linelists.mergelinelists(
+    ["linelists/VALD_20220201.dat", "linelists/linelist_3000_4200.dat"],[[wave_start, wave_end]])
 
     if len(mu) > 0:
         fx = []

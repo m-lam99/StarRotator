@@ -391,7 +391,6 @@ def build_spectrum_limb_resolved(wl,fx_list,mu_list,wlmin,wlmax,x,y,vel_grid,flu
     rmu = np.sqrt(1 - mu_list**2)
     rlist = np.sqrt(0.5 * (rmu[:-1] ** 2 + rmu[1:] ** 2))  # area midpoints between rmu
     rlist = np.concatenate(([1], rlist))
-
     for i in range(len(x)):
         for j in range(len(y)):
             if np.isnan(vel_grid[j,i]) == False:
